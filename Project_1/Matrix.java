@@ -20,7 +20,7 @@ public class Matrix {
   {
    for(int x = 0; x < cols; x++)
    {
-    values[y][x] = rand.nextDouble() * 10.0; //generating a double number between 0 and 10
+    values[y][x] = rand.nextInt(10); //generating an integer number between 0 and 9
    }
   }
 
@@ -33,11 +33,11 @@ public class Matrix {
 	 rows = r;
 	 cols = c;
 
-     if (r < v.length || c < v[0].length)
+     if (r < v.length || (v.length > 0 && c < v[0].length))
      {
     	 System.out.println("Input matrix is larger than specified size. New matrix will miss some data.");
      }
-     else if (r > v.length || c > v[0].length)
+     else if (r > v.length || (v.length > 0 && c > v[0].length))
      {
     	 System.out.println("Input matrix is smaller than specified size. New matrix will have 0s where data isn't provided.");
      }
@@ -46,7 +46,11 @@ public class Matrix {
 	 {
 		 for (int x = 0; x < cols; ++x)
 		 {
-			 values[y][x] = v[y][x];
+			 // check if the element exists in the input array, otherwise use 0 (default)
+			 if (y < v.length && x < v[y].length)
+			 {
+				 values[y][x] = v[y][x];
+			 }
 		 }
 	 }
   
@@ -81,12 +85,12 @@ public class Matrix {
         return null;
     }
     Matrix result = new Matrix(this.rows, m.cols);
-    int len = this.rows; //or m.cols, they are the same for multiplication
+    int len = this.cols; //or m.rows, they are the same for multiplication
     for (int i = 0; i < this.rows; ++i)
     {
-        for (int j = 0; i < m.cols; ++j)
+        for (int j = 0; j < m.cols; ++j)
         {
-            double sum = 0.0
+            double sum = 0.0;
             for (int k = 0; k < len; ++k)
             {
                 sum += this.values[i][k] * m.values[k][j];
@@ -108,8 +112,42 @@ public class Matrix {
   * computing one column within the result matrix*/
  Matrix multiplyByThreads(Matrix m)
  {
-  //Implementation here...
+  // checking dimensions for matrix multiplication
+  if (this.cols != m.rows)
+  {
+      System.out.println("Error: Columns of current matrix do not match rows of input matrix for multiplication. Returning null matrix");
+      return null;
+  }
+  
   Matrix result = new Matrix(this.rows, m.cols);
+  List<Thread> threads = new ArrayList<>(); // ArrayList to keep track of threads for joining later
+  
+  // create threads for each column
+  for (int col = 0; col < m.cols; ++col)
+  {
+     // creating a ColumnCalculator object for each column
+      ColumnCalculator calc = new ColumnCalculator(this, m, result, col);
+      Thread thread = new Thread(calc); // create a thread to run the ColumnCalculator
+      threads.add(thread);
+      thread.start();
+      
+      // if there are 10 threads or this is the last column, wait for all to complete
+      if (threads.size() == 10 || col == m.cols - 1)
+      {
+          for (Thread t : threads)
+          {
+              try
+              {
+                  t.join(); // wait for the threads to complete
+              }
+              catch (InterruptedException e)
+              {
+                  e.printStackTrace(); // handle interruption exception
+              }
+          }
+          threads.clear(); // emrpting the Arraylist for the next batch
+      }
+  }
   
   return result; 
  }
@@ -118,8 +156,80 @@ public class Matrix {
  /* The main function for evaluation purpose*/
  public static void main(String[] args)
  {
-  //Implementation here...
+  // test 1: Simple matrices with known values to verify correctness
+  System.out.println("Test 1: Simple Matrix Multiplication");
+  double[][] testData1 = {{1, 2}, {3, 4}};
+  double[][] testData2 = {{5, 6}, {7, 8}};
   
+  Matrix m1 = new Matrix(2, 2, testData1);
+  Matrix m2 = new Matrix(2, 2, testData2);
+  
+  System.out.println("Matrix 1:");
+  m1.print();
+  System.out.println("Matrix 2:");
+  m2.print();
+  
+  // test normal matrix multiplication
+  System.out.println("Result of m1.multiplyBy(m2):");
+  Matrix result1 = m1.multiplyBy(m2);
+  if (result1 != null) result1.print();
+  
+  // test multiplyByThreads, which should be faster than the normal matrix multiplication without threads
+  System.out.println("Result of m1.multiplyByThreads(m2):");
+  Matrix result2 = m1.multiplyByThreads(m2);
+  if (result2 != null) result2.print();
+  
+  // verify both methods give the same result
+  System.out.println("Verifying both methods produce same results:");
+  boolean same = true; // flag to check if results are the same
+  if (result1 != null && result2 != null)
+  {
+      for (int i = 0; i < result1.rows && same; ++i)
+      {
+          for (int j = 0; j < result1.cols && same; ++j)
+          {
+              if (result1.values[i][j] != result2.values[i][j])
+              {
+                  same = false;
+              }
+          }
+      }
+      System.out.println("Results match: " + same);
+  }
+  
+  // Test 2 - comparing the performances with large matrices
+  System.out.println("Test 2: Performance Comparison with Large Matrices (1000x2000 x 2000x1000)");
+  int rows1 = 1000;
+  int cols1 = 2000;
+  int cols2 = 1000;
+  
+  System.out.println("Creating large matrices");
+  Matrix largeM1 = new Matrix(rows1, cols1);
+  Matrix largeM2 = new Matrix(cols1, cols2);
+  
+  // test normal matrix multiplication
+  System.out.println("Testing multiplyBy() with large matrices...");
+  long startTime = System.currentTimeMillis();
+  Matrix largeResult1 = largeM1.multiplyBy(largeM2);
+  long endTime = System.currentTimeMillis();
+  long timeMultiplyBy = endTime - startTime;
+  System.out.println("Time for multiplyBy(): " + timeMultiplyBy + " ms");
+  
+  // test matrix multiplication with threads, which should be faster than the normal matrix multiplication without threads
+  System.out.println("Testing multiplyByThreads() with large matrices...");
+  startTime = System.currentTimeMillis();
+  Matrix largeResult2 = largeM1.multiplyByThreads(largeM2);
+  endTime = System.currentTimeMillis();
+  long timeMultiplyByThreads = endTime - startTime;
+  System.out.println("Time for multiplyByThreads(): " + timeMultiplyByThreads + " ms");
+  
+  // printing the results
+  System.out.println("Performance Comparison:");
+  System.out.println("Matrix dimensions: " + rows1 + " x " + cols1 + " * " + cols1 + " x " + cols2);
+  System.out.println("multiplyBy() execution time: " + timeMultiplyBy + " ms");
+  System.out.println("multiplyByThreads() execution time: " + timeMultiplyByThreads + " ms");
+  double speedup = (double) timeMultiplyBy / timeMultiplyByThreads;
+  System.out.println("Speedup (multiplyBy time / multiplyByThreads time): " + String.format("%.2f", speedup) + "x");
   
  }
 }

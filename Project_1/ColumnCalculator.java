@@ -45,8 +45,18 @@ class ColumnCalculator implements Runnable{
  //calculating all the elements in the column of index (specified by "col_idx") of the result matrix
  @Override
  public void run(){
-	//Implementation here...
-
+	// For each row in the result matrix, calculate the element at [row][col_idx]
+	// by computing the sum-of-pairwise-product between the corresponding row of m1
+	// and the corresponding column of m2
+	for (int i = 0; i < m1.rows; ++i)
+	{
+		double sum = 0.0; // sum for matrix product for each element in the column
+		for (int k = 0; k < m1.cols; ++k)
+		{
+			sum += m1.values[i][k] * m2.values[k][col_idx];
+		}
+		result.values[i][col_idx] = sum;
+	}
  
 }
 
